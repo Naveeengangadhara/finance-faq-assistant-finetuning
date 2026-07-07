@@ -1,0 +1,14 @@
+# Training outputs / checkpoints / model weights (large, regenerate via notebooks)
+outputs/
+*.bin
+*.safetensors
+*.pt
+*.gguf
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store

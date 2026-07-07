@@ -1,0 +1,12 @@
+# Local (data prep) — no GPU needed, no extra installs required beyond
+# the Python standard library. Kept here for completeness/documentation.
+
+# Training + inference (run inside Google Colab with a GPU runtime):
+unsloth
+trl<0.9.0
+peft
+accelerate
+bitsandbytes
+transformers
+datasets
+torch
