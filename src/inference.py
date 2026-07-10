@@ -5,22 +5,22 @@ Usage:
     python src/inference.py "How can I start building an emergency fund?"
     python src/inference.py            # interactive prompt loop
 
-Loads the merged model saved by notebooks/dpo_alignment.ipynb at
-outputs/dpo_merged (falls back to the raw LoRA adapter at
-outputs/dpo_adapter if the merged model isn't present).
-
-Requires the same GPU environment (unsloth, torch, transformers) the
-notebooks were trained in.
+Loads the merged model from the Hugging Face Hub (MODEL_ID below) by
+default. If a local outputs/dpo_merged directory exists (e.g. right after
+running dpo_alignment.ipynb and downloading it), that takes priority.
+Works on CPU or GPU — no unsloth/bitsandbytes required, since the merged
+model is plain full-precision weights.
 """
 
+import os
 import sys
 from pathlib import Path
 
-from unsloth import FastLanguageModel
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-MAX_SEQ_LENGTH = 2048
-MERGED_MODEL_DIR = "outputs/dpo_merged"
-ADAPTER_DIR = "outputs/dpo_adapter"
+MODEL_ID = os.environ.get("MODEL_ID", "Naveengangadhara/finance-qwen-dpo-merged")
+LOCAL_MERGED_DIR = "outputs/dpo_merged"
 
 PROMPT_TEMPLATE = """Below is a question about personal finance. Write a clear, accurate, and helpful response.
 
@@ -39,23 +39,16 @@ def _load_model():
     if _model is not None:
         return _model, _tokenizer
 
-    if Path(MERGED_MODEL_DIR).is_dir():
-        model_path = MERGED_MODEL_DIR
-    elif Path(ADAPTER_DIR).is_dir():
-        model_path = ADAPTER_DIR
-    else:
-        raise FileNotFoundError(
-            "No trained model found. Run notebooks/dpo_alignment.ipynb first "
-            f"to produce {MERGED_MODEL_DIR} or {ADAPTER_DIR}."
-        )
+    model_path = LOCAL_MERGED_DIR if Path(LOCAL_MERGED_DIR).is_dir() else MODEL_ID
+    print(f"Loading model from: {model_path}")
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=model_path,
-        max_seq_length=MAX_SEQ_LENGTH,
-        dtype=None,
-        load_in_4bit=True,
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        device_map="auto" if torch.cuda.is_available() else None,
     )
-    FastLanguageModel.for_inference(model)
+    model.eval()
     _model, _tokenizer = model, tokenizer
     return model, tokenizer
 
@@ -64,13 +57,15 @@ def generate_answer(question: str, max_new_tokens: int = 200) -> str:
     model, tokenizer = _load_model()
     prompt = PROMPT_TEMPLATE.format(instruction=question)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=max_new_tokens,
-        use_cache=True,
-        temperature=0.7,
-        do_sample=True,
-    )
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=0.7,
+            top_p=0.9,
+            pad_token_id=tokenizer.eos_token_id,
+        )
     decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return decoded.split("### Response:")[-1].strip()
 
@@ -78,8 +73,7 @@ def generate_answer(question: str, max_new_tokens: int = 200) -> str:
 def main():
     if len(sys.argv) > 1:
         question = " ".join(sys.argv[1:])
-        answer = generate_answer(question)
-        print(answer)
+        print(generate_answer(question))
         return
 
     print("Finance FAQ Assistant (type 'exit' to quit)")

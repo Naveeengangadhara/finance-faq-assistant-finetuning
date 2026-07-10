@@ -157,6 +157,10 @@ Finance-Assistance/
 │   └── prepare_datasets.py
 ├── src/
 │   └── inference.py
+├── space/
+│   ├── app.py
+│   ├── requirements.txt
+│   └── README.md
 ├── README.md
 └── requirements.txt
 ```
@@ -165,9 +169,26 @@ Finance-Assistance/
 
 1. **Data prep (local, no GPU):** `python3 scripts/prepare_datasets.py` — already run; regenerate if you want a different sample.
 2. **Push this repo to GitHub** so the Colab notebooks can `git clone` it (or upload files manually per notebook — see the upload cells in each notebook).
-3. **Stage 1:** open `notebooks/non_instruction_finetuning.ipynb` in Colab (T4 GPU runtime), run all cells.
-4. **Stage 2:** open `notebooks/instruction_finetuning.ipynb`, run all cells (loads Stage 1 adapter if present).
+3. **Stage 1:** open `notebooks/non_instruction_finetuning.ipynb` in Colab (T4 GPU runtime), run all cells. The `notebook_login()` cell will prompt for a Hugging Face access token (Settings → Access Tokens, "Write" role) — paste it in when asked. The final cell pushes the adapter to `Naveengangadhara/finance-qwen-stage1-adapter` on the Hub.
+4. **Stage 2:** open `notebooks/instruction_finetuning.ipynb`, run all cells. It loads the Stage 1 adapter from the local `outputs/` folder if present in the same runtime, otherwise pulls it from the Hub. Pushes the result to `Naveengangadhara/finance-qwen-sft-adapter`.
 5. Fill in `reports/base_model_evaluation.md` and `reports/sft_model_comparison.md` using the `ask()` helpers in these notebooks.
-6. **Stage 3:** open `notebooks/dpo_alignment.ipynb`, run all cells (loads Stage 2 adapter).
+6. **Stage 3:** open `notebooks/dpo_alignment.ipynb`, run all cells (loads the Stage 2 SFT adapter the same local-then-Hub way). Pushes the final adapter to `Naveengangadhara/finance-qwen-dpo-adapter` and the merged, full-precision model to `Naveengangadhara/finance-qwen-dpo-merged` — **this merged repo is what both `src/inference.py` and the demo app load.**
 7. Fill in `reports/final_evaluation.md`.
-8. Download `outputs/dpo_merged/` (or `outputs/dpo_adapter/`) back to a GPU machine and run `python src/inference.py "your question"`.
+8. Run `python src/inference.py "your question"` from anywhere (no GPU/Colab needed) — it pulls the merged model straight from the Hub.
+
+Because every stage pushes to the Hub as soon as it finishes, none of this depends on keeping a single Colab runtime alive across sessions — you can run Stage 1 today and Stage 3 next week in a brand-new runtime.
+
+## Deploying the demo (Hugging Face Spaces)
+
+The `space/` folder is a self-contained Gradio app that loads
+`Naveengangadhara/finance-qwen-dpo-merged` from the Hub and serves a chat UI.
+It has no dependency on this GitHub repo at runtime, so it can be deployed on
+its own once Stage 3 has been run at least once:
+
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space), pick a name (e.g. `finance-faq-assistant`), SDK: **Gradio**, hardware: free **CPU basic** is enough for a 0.5B model.
+2. Clone the new Space repo it creates: `git clone https://huggingface.co/spaces/Naveengangadhara/finance-faq-assistant`
+3. Copy `space/app.py`, `space/requirements.txt`, and `space/README.md` into that cloned folder.
+4. `git add . && git commit -m "Add Finance FAQ Assistant demo" && git push`
+5. The Space builds automatically and gives you a public URL (`https://huggingface.co/spaces/Naveengangadhara/finance-faq-assistant`) you can share directly with users.
+
+No secrets are needed in the Space since `finance-qwen-dpo-merged` is a public model repo. First load takes ~30-60s (cold start on free CPU); after that each answer generates in a few seconds.
