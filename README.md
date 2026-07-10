@@ -169,12 +169,13 @@ Finance-Assistance/
 
 1. **Data prep (local, no GPU):** `python3 scripts/prepare_datasets.py` — already run; regenerate if you want a different sample.
 2. **Push this repo to GitHub** so the Colab notebooks can `git clone` it (or upload files manually per notebook — see the upload cells in each notebook).
-3. **Stage 1:** open `notebooks/non_instruction_finetuning.ipynb` in Colab (T4 GPU runtime), run all cells. The `notebook_login()` cell will prompt for a Hugging Face access token (Settings → Access Tokens, "Write" role) — paste it in when asked. The final cell pushes the adapter to `Naveengangadhara/finance-qwen-stage1-adapter` on the Hub.
-4. **Stage 2:** open `notebooks/instruction_finetuning.ipynb`, run all cells. It loads the Stage 1 adapter from the local `outputs/` folder if present in the same runtime, otherwise pulls it from the Hub. Pushes the result to `Naveengangadhara/finance-qwen-sft-adapter`.
-5. Fill in `reports/base_model_evaluation.md` and `reports/sft_model_comparison.md` using the `ask()` helpers in these notebooks.
-6. **Stage 3:** open `notebooks/dpo_alignment.ipynb`, run all cells (loads the Stage 2 SFT adapter the same local-then-Hub way). Pushes the final adapter to `Naveengangadhara/finance-qwen-dpo-adapter` and the merged, full-precision model to `Naveengangadhara/finance-qwen-dpo-merged` — **this merged repo is what both `src/inference.py` and the demo app load.**
-7. Fill in `reports/final_evaluation.md`.
-8. Run `python src/inference.py "your question"` from anywhere (no GPU/Colab needed) — it pulls the merged model straight from the Hub.
+3. **One-time Colab setup:** in any Colab notebook, click the key icon in the left sidebar → add a secret named `HF_TOKEN` with your Hugging Face **write**-role token (Settings → Access Tokens) → toggle notebook access on. Every notebook below reads it via `google.colab.userdata`, so you never have to paste a token again across sessions.
+5. **Stage 1:** open `notebooks/non_instruction_finetuning.ipynb` in Colab (T4 GPU runtime), run all cells. The final cell pushes the adapter to `Naveengangadhara/finance-qwen-stage1-adapter` on the Hub.
+6. **Stage 2:** open `notebooks/instruction_finetuning.ipynb`, run all cells. It loads the Stage 1 adapter from the local `outputs/` folder if present in the same runtime, otherwise pulls it from the Hub. Pushes the result to `Naveengangadhara/finance-qwen-sft-adapter`.
+7. Fill in `reports/base_model_evaluation.md` and `reports/sft_model_comparison.md` using the `ask()` helpers in these notebooks.
+8. **Stage 3:** open `notebooks/dpo_alignment.ipynb`, run all cells (loads the Stage 2 SFT adapter the same local-then-Hub way). Pushes the final adapter to `Naveengangadhara/finance-qwen-dpo-adapter` and the merged, full-precision model to `Naveengangadhara/finance-qwen-dpo-merged` — **this merged repo is what both `src/inference.py` and the demo app load.**
+9. Fill in `reports/final_evaluation.md`.
+10. Run `python src/inference.py "your question"` from anywhere (no GPU/Colab needed) — it pulls the merged model straight from the Hub.
 
 Because every stage pushes to the Hub as soon as it finishes, none of this depends on keeping a single Colab runtime alive across sessions — you can run Stage 1 today and Stage 3 next week in a brand-new runtime.
 
