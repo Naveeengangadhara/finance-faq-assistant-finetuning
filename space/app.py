@@ -8,6 +8,7 @@ or local files.
 import os
 
 import gradio as gr
+import spaces
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -23,14 +24,17 @@ PROMPT_TEMPLATE = """Below is a question about personal finance. Write a clear, 
 
 print(f"Loading {MODEL_ID} ...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=torch.float32)
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=torch.float16)
 model.eval()
 print("Model loaded.")
 
 
+@spaces.GPU
 def answer(question: str, history=None, max_new_tokens: int = 200) -> str:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
     prompt = PROMPT_TEMPLATE.format(instruction=question)
-    inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
