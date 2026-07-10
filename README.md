@@ -29,9 +29,9 @@ original public dataset.
 
 | File | Rows | Description |
 |---|---|---|
-| `data/non_instruction_data.txt` | 60 paragraphs | Raw finance Q&A answer text, used for Stage 1 domain-adaptation (causal LM) training |
-| `data/instruction_dataset.jsonl` | 110 pairs | `{"instruction", "response"}` pairs for Stage 2 SFT |
-| `data/preference_dataset.jsonl` | 55 triples | `{"prompt", "chosen", "rejected"}` for Stage 3 DPO. `chosen` = real dataset answer; `rejected` = a rule-based generic/unhelpful response drawn from a small template pool (see `REJECTED_TEMPLATES` in the prep script) |
+| `data/non_instruction_data.txt` | 300 paragraphs | Raw finance Q&A answer text, used for Stage 1 domain-adaptation (causal LM) training |
+| `data/instruction_dataset.jsonl` | 600 pairs | `{"instruction", "response"}` pairs for Stage 2 SFT |
+| `data/preference_dataset.jsonl` | 300 triples | `{"prompt", "chosen", "rejected"}` for Stage 3 DPO. `chosen` = real dataset answer; `rejected` = a rule-based generic/unhelpful response drawn from a small template pool (see `REJECTED_TEMPLATES` in the prep script) |
 
 Regenerate all three files at any time with:
 

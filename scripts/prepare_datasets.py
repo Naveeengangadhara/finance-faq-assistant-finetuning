@@ -23,7 +23,7 @@ from pathlib import Path
 DATASET = "gbharti/finance-alpaca"
 API = "https://datasets-server.huggingface.co/rows"
 PAGE_SIZE = 100
-MAX_ROWS_TO_SCAN = 4000  # enough headroom after filtering
+MAX_ROWS_TO_SCAN = 20000  # scan more of the ~69k rows for a larger candidate pool
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -51,20 +51,38 @@ def fetch_rows():
             f"{API}?dataset={DATASET.replace('/', '%2F')}"
             f"&config=default&split=train&offset={offset}&length={PAGE_SIZE}"
         )
-        for attempt in range(3):
+        backoff = 2
+        payload = None
+        for attempt in range(6):
             try:
                 with urllib.request.urlopen(url, timeout=30) as resp:
                     payload = json.load(resp)
                 break
+            except urllib.error.HTTPError as exc:
+                if exc.code in (429, 500, 502, 503, 504) and attempt < 5:
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, 30)
+                    continue
+                print(f"  giving up on offset={offset} ({exc}), skipping page")
+                break
             except Exception as exc:
-                if attempt == 2:
-                    raise
-                time.sleep(2)
+                if attempt == 5:
+                    print(f"  giving up on offset={offset} ({exc}), skipping page")
+                    break
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+
+        if payload is None:
+            offset += PAGE_SIZE
+            time.sleep(0.3)
+            continue
+
         page_rows = payload.get("rows", [])
         if not page_rows:
             break
         rows.extend(r["row"] for r in page_rows)
         offset += PAGE_SIZE
+        time.sleep(0.3)  # be polite to the shared datasets-server API
     return rows
 
 
@@ -121,7 +139,7 @@ def build():
 
     RNG.shuffle(candidates)
 
-    need = {"non_instruction": 60, "instruction": 110, "preference": 55}
+    need = {"non_instruction": 300, "instruction": 600, "preference": 300}
     total_need = sum(need.values())
     if len(candidates) < total_need:
         raise SystemExit(
