@@ -94,14 +94,31 @@ All stages load the base model 4-bit (QLoRA) via `load_in_4bit=True`.
 
 ## Training screenshots or logs
 
-_Add screenshots of the Colab training run (loss curves / trainer logs) here
-after running each notebook, e.g.:_
+All three stages were actually run end-to-end in Colab and pushed to the Hub
+(see the pipeline verification below) — but the Colab session logs/loss
+curves themselves were not saved as images before the runtimes were closed,
+so there are no screenshot files in this repo yet.
 
-```
-reports/screenshots/stage1_training_log.png
-reports/screenshots/stage2_training_log.png
-reports/screenshots/stage3_training_log.png
-```
+**What's verifiable right now, without a screenshot:**
+- Trained artifacts exist on the Hub: `Naveengangadhara/finance-qwen-stage1-adapter`,
+  `finance-qwen-sft-adapter`, `finance-qwen-dpo-adapter`, and the merged
+  `finance-qwen-dpo-merged` — each repo's commit history/timestamp is itself a
+  training record.
+- The eval reports (`reports/base_model_evaluation.md`,
+  `reports/sft_model_comparison.md`, `reports/final_evaluation.md`) contain
+  real generations pulled from each of these pushed models, not placeholder
+  text — that's only possible if training actually completed.
+- The git history documents real training-time fixes as they happened, e.g.
+  `073c36f` (fixing degenerate repetition loops via
+  `repetition_penalty`/`no_repeat_ngram_size`) and `60c6ca9` (scaling the
+  dataset 5x after the first pass).
+
+**Still to do before submission:** re-open each notebook's Colab run (or the
+run history in your Colab account) and drop 2-3 actual screenshots of the
+trainer progress bars / loss values into
+`reports/screenshots/stage{1,2,3}_training_log.png`, then link them here.
+This is the one deliverable in this repo that requires a live Colab session
+to produce — it can't be reconstructed from what's already committed.
 
 ## Before vs after output comparison
 
@@ -110,20 +127,51 @@ See:
 - [`reports/sft_model_comparison.md`](reports/sft_model_comparison.md) — base vs SFT
 - [`reports/final_evaluation.md`](reports/final_evaluation.md) — base vs SFT vs DPO, final verdict
 
-These are pre-built with the same 10 fixed questions; fill in the answer
-columns after running each notebook in Colab.
+All three reports use the same 10 fixed questions from
+[`reports/eval_questions.json`](reports/eval_questions.json) and are fully
+filled in with real generations and judgments for every stage.
 
 ## Final observations
 
-_Fill in after completing all three stages and the final evaluation —
-summarize what improved at each stage and whether DPO meaningfully improved
-response quality over SFT alone._
+Full breakdown with all 10 questions is in
+[`reports/final_evaluation.md`](reports/final_evaluation.md); in short:
+quality did **not** improve monotonically through the pipeline. On the fixed
+10-question set, the untrained base model produced the most reliable answer
+9 times out of 10 — SFT won once (Q7), and DPO never won outright. SFT
+shifted the model toward the casual, sometimes-tangential "forum answer"
+tone of the underlying `finance-alpaca`/FiQA training data rather than a
+cleaner FAQ-answering register, and DPO on top of that produced the most
+confidently-wrong outputs of the three stages (a stray Chinese-language
+token, an arithmetically impossible compounding example, a flatly false
+claim about corporate bond issuance). The likely root cause: the 300
+preference pairs reuse only 10 fixed "rejected" template strings (see
+`REJECTED_TEMPLATES` in `scripts/prepare_datasets.py`), so DPO mostly learned
+to avoid those exact 10 phrases rather than to be more correct in general.
+The pipeline itself runs correctly end-to-end — this is a data-diversity and
+model-scale limitation, not a broken training setup.
 
 ## Challenges faced
 
-_Document any real issues you hit while running this in Colab — e.g. GPU
-memory limits, dependency version conflicts between `unsloth`/`trl`/`peft`,
-runtime disconnects, dataset formatting edge cases, etc._
+- **TRL version conflicts on Colab:** an early `trl<0.9.0` pin broke installs
+  on newer Colab images; fixed by removing the stale pin
+  (`fix/trl-version-pin-colab` branch, merged in `14d9760`).
+- **Degenerate repetition in generated text:** early evaluation runs produced
+  looping/repeating output; fixed by adding `repetition_penalty` and
+  `no_repeat_ngram_size` to the generation config (`073c36f`), which required
+  re-running and refreshing every eval report afterward.
+- **Not enough filtered candidates on the first pass:** the initial
+  finance-FAQ keyword filter over `gbharti/finance-alpaca` didn't yield
+  enough self-contained Q&A pairs to hit a comfortable margin above the
+  assignment minimums, so the dataset was scaled 5x (50/100/50 →
+  300/600/300) and `MAX_ROWS_TO_SCAN` increased (`60c6ca9`).
+- **Re-authenticating to the Hub every session:** initially prompted for an
+  HF token on every Colab run; switched to reading `HF_TOKEN` from Colab
+  Secrets once, toggled per-notebook (`45428bb`).
+- **DPO didn't obviously beat SFT/base:** this only became visible after
+  building `scripts/evaluate_models.py` to automate side-by-side generation
+  — manually eyeballing a couple of examples made DPO's answers *look* more
+  detailed, but the automated comparison across all 10 questions showed it
+  was actually introducing more hallucinated specifics, not fewer.
 
 ## Future improvements
 
